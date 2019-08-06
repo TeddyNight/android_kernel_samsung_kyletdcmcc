@@ -18,7 +18,6 @@
 #if MALI_TIMELINE_PROFILING_ENABLED
 #include "mali_osk_profiling.h"
 #endif
-#include "mali_pm.h"
 
 /**
  * Definition of the GP core struct
@@ -299,6 +298,14 @@ void mali_gp_job_start(struct mali_gp_core *core, struct mali_gp_job *job)
 
 	mali_hw_core_register_write_array_relaxed(&core->hw_core, MALIGP2_REG_ADDR_MGMT_VSCL_START_ADDR, frame_registers, MALIGP2_NUM_REGS_FRAME);
 
+#if PROFILING_PRINT_L2_HITRATE_ON_GP_FINISH
+	{
+		/* Read hits and Read misses*/
+		mali_l2_cache_core_set_counter_src0(mali_l2_cache_core_get_glob_l2_core(0), 20);
+		mali_l2_cache_core_set_counter_src1(mali_l2_cache_core_get_glob_l2_core(0), 21);
+	}
+#endif
+
 	/* This selects which performance counters we are reading */
 	if (MALI_HW_CORE_NO_COUNTER != core->counter_src0_used || MALI_HW_CORE_NO_COUNTER != core->counter_src0_used)
 	{
@@ -446,19 +453,9 @@ struct mali_gp_core *mali_gp_get_global_gp_core(void)
 static _mali_osk_errcode_t mali_gp_upper_half(void *data)
 {
 	struct mali_gp_core *core = (struct mali_gp_core *)data;
-	u32 irq_readout = 0;
+	u32 irq_readout;
 
-#if MALI_SHARED_INTERRUPTS
-	mali_pm_lock();
-	if (MALI_TRUE == mali_pm_is_powered_on())
-	{
-#endif
 	irq_readout = mali_hw_core_register_read(&core->hw_core, MALIGP2_REG_ADDR_MGMT_INT_STAT);
-#if MALI_SHARED_INTERRUPTS
-	}
-	mali_pm_unlock();
-#endif
-
 	if (MALIGP2_REG_VAL_IRQ_MASK_NONE != irq_readout)
 	{
 		/* Mask out all IRQs from this core until IRQ is handled */
@@ -608,6 +605,51 @@ static void mali_gp_post_process_job(struct mali_gp_core *core, mali_bool suspen
 		u32 val1 = 0;
 #if MALI_TIMELINE_PROFILING_ENABLED
 		u32 event_id;
+#endif
+
+#if PROFILING_PRINT_L2_HITRATE_ON_GP_FINISH
+	{
+		u32 src0, value0, src1, value1, sum, per_thousand, per_thousand_now, diff0, diff1;
+		static u32 print_nr=0;
+		static u32 prev0=0;
+		static u32 prev1=0;
+		if ( !(++print_nr&511) )
+		{
+			mali_l2_cache_core_get_counter_values(mali_l2_cache_core_get_glob_l2_core(0), &src0, &value0, &src1, &value1);
+			MALI_DEBUG_ASSERT( src0==20 ); /* Read hits */
+			MALI_DEBUG_ASSERT( src1==21 ); /* Read misses */
+
+			sum = value0+value1;
+			if ( sum > 1000000 )
+			{
+				per_thousand = value0 / (sum/1000);
+			}
+			else
+			{
+				per_thousand = (value0*1000) / (sum);
+			}
+			diff0 = value0-prev0;
+			diff1 = value1-prev1;
+
+			sum = diff0 + diff1 ;
+			if ( sum > 1000000 )
+			{
+				per_thousand_now = diff0 / (sum/1000);
+			}
+			else
+			{
+				per_thousand_now = (diff0*1000) / (sum);
+			}
+
+			prev0=value0;
+			prev1=value1;
+			if (per_thousand_now<=1000)
+			{
+				MALI_DEBUG_PRINT(2, ("Mali L2: Read hits/misses:  %d/%d  =  %d thousand_parts total, since previous: %d\n", value0, value1, per_thousand, per_thousand_now));
+			}
+
+		}
+	}
 #endif
 
 		if (MALI_HW_CORE_NO_COUNTER != core->counter_src0_used)

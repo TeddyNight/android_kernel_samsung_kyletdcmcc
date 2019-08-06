@@ -10,10 +10,13 @@
 
 # Set default configuration to use, if Makefile didn't provide one.
 # Change this to use a different config.h
-CONFIG ?= sc8825
+CONFIG ?= sc8810
 
 DRIVER_DIR=$(shell pwd)/source/$(src)
-#DRIVER_DIR=$(src)
+
+ifneq ($(shell [ -d $(DRIVER_DIR)/arch-$(CONFIG) ] && [ -f $(DRIVER_DIR)/arch-$(CONFIG)/config.h ] && echo "OK"), OK)
+DRIVER_DIR=$(src)
+endif
 
 # Validate selected config
 ifneq ($(shell [ -d $(DRIVER_DIR)/arch-$(CONFIG) ] && [ -f  $(DRIVER_DIR)/arch-$(CONFIG)/config.h ] && echo "OK"), OK)
@@ -30,7 +33,7 @@ UDD_FILE_PREFIX = ../mali/
 
 # Get subversion revision number, fall back to 0000 if no svn info is available
 #SVN_REV := $(shell ((svnversion | grep -qv exported && echo -n 'Revision: ' && svnversion) || git svn info | sed -e 's/$$$$/M/' | grep '^Revision: ' || echo ${MALI_RELEASE_NAME}) 2>/dev/null | sed -e 's/^Revision: //')
-SVN_REV=r3p0
+SVN_REV=r3p1
 
 ccflags-y += -DSVN_REV=$(SVN_REV)
 ccflags-y += -DSVN_REV_STRING=\"$(SVN_REV)\"

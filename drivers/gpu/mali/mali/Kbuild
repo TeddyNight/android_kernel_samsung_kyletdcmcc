@@ -16,13 +16,16 @@ OSKOS=linux
 USING_UMP ?= 1
 USING_OS_MEMORY ?= 0
 USING_MALI_PMM_TESTSUITE ?= 0
-OS_MEMORY_KERNEL_BUFFER_SIZE_IN_MB ?= 6
+OS_MEMORY_KERNEL_BUFFER_SIZE_IN_MB ?= 16
 USING_PROFILING ?= 1
 USING_INTERNAL_PROFILING ?= 0
 DISABLE_PP0 ?= 0
 DISABLE_PP1 ?= 0
 DISABLE_PP2 ?= 0
 DISABLE_PP3 ?= 0
+PROFILING_SKIP_PP_JOBS ?= 0
+PROFILING_SKIP_PP_AND_GP_JOBS ?= 0
+PROFILING_PRINT_L2_HITRATE_ON_GP_FINISH ?= 0
 TIMESTAMP ?= default
 TARGET_PLATFORM ?= sc8810
 KERNEL_RUNTIME_PM_ENABLED ?= 0
@@ -30,13 +33,13 @@ CONFIG ?= sc8810
 MALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP ?= 0
 MALI_PP_SCHEDULER_KEEP_SUB_JOB_STARTS_ALIGNED ?= 0
 MALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP_BETWEEN_APPS ?= 0
-MALI_SHARED_INTERRUPTS ?= 1
-
-DEFINES := $(EXTRA_DEFINES)
 
 # Get path to driver source from Linux build system
 DRIVER_DIR=$(shell pwd)/source/$(src)
-#DRIVER_DIR=$(src)
+
+ifneq ($(shell [ -d $(DRIVER_DIR)/arch-$(CONFIG) ] && [ -f $(DRIVER_DIR)/arch-$(CONFIG)/config.h ] && echo "OK"), OK)
+DRIVER_DIR=$(src)
+endif
 
 # For customer releases the Linux Device Drivers will be provided as ARM proprietary and GPL releases:
 # The ARM proprietary product will only include the license/proprietary directory
@@ -104,7 +107,7 @@ endif
 
 # Get subversion revision number, fall back to only ${MALI_RELEASE_NAME} if no svn info is available
 #SVN_REV := $(shell (cd $(DRIVER_DIR); (svnversion | grep -qv exported && svnversion) || git svn info | grep '^Revision: '| sed -e 's/^Revision: //' ) 2>/dev/null )
-SVN_REV=r3p0
+SVN_REV=r3p1
 ifeq ($(SVN_REV),)
 SVN_REV := $(MALI_RELEASE_NAME)
 else
@@ -133,13 +136,15 @@ DEFINES += -DDISABLE_PP0=$(DISABLE_PP0)
 DEFINES += -DDISABLE_PP1=$(DISABLE_PP1)
 DEFINES += -DDISABLE_PP2=$(DISABLE_PP2)
 DEFINES += -DDISABLE_PP3=$(DISABLE_PP3)
+DEFINES += -DPROFILING_SKIP_PP_JOBS=$(PROFILING_SKIP_PP_JOBS)
+DEFINES += -DPROFILING_SKIP_PP_AND_GP_JOBS=$(PROFILING_SKIP_PP_AND_GP_JOBS)
+DEFINES += -DPROFILING_PRINT_L2_HITRATE_ON_GP_FINISH=$(PROFILING_PRINT_L2_HITRATE_ON_GP_FINISH)
+
 DEFINES += -DMALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP=$(MALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP)
 DEFINES += -DMALI_PP_SCHEDULER_KEEP_SUB_JOB_STARTS_ALIGNED=$(MALI_PP_SCHEDULER_KEEP_SUB_JOB_STARTS_ALIGNED)
 DEFINES += -DMALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP_BETWEEN_APPS=$(MALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP_BETWEEN_APPS)
 DEFINES += -DMALI_TIMELINE_PROFILING_ENABLED=$(USING_PROFILING)
 DEFINES += -DMALI_POWER_MGMT_TEST_SUITE=$(USING_MALI_PMM_TESTSUITE)
-DEFINES += -DMALI_SHARED_INTERRUPTS=$(MALI_SHARED_INTERRUPTS)
-
 ifeq ($(shell test $(SUBLEVEL) -gt 32 -a $(PATCHLEVEL) = 6 -a $(VERSION) = 2 -o $(VERSION) -gt 2 && echo "OK"),OK)
 # MALI_STATE_TRACKING is only supported on Linux kernels from version 2.6.32.
 DEFINES += -DMALI_STATE_TRACKING=1
@@ -180,7 +185,6 @@ ccflags-$(CONFIG_MALI400_DEBUG) += -DDEBUG
 SRC = \
 	common/mali_kernel_core.c \
 	linux/mali_kernel_linux.c \
-	$(OSKOS)/mali_osk_indir_mmap.c \
 	common/mali_kernel_descriptor_mapping.c \
 	common/mali_session.c \
 	common/mali_device_pause_resume.c \
@@ -238,6 +242,7 @@ ccflags-y += -I$(DRIVER_DIR)/platform/mali_pmu_testing
 endif
 
 mali-$(CONFIG_MALI400_GPU_UTILIZATION) += common/mali_kernel_utilization.o
+mali-$(CONFIG_DMA_SHARED_BUFFER) += linux/mali_dma_buf.o
 
 ifneq ($(call submodule_enabled, $(DRIVER_DIR), MALI400PP),0)
 	# Mali-400 PP in use

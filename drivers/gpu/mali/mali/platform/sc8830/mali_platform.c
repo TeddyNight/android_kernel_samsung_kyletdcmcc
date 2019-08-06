@@ -23,27 +23,11 @@
 #include <mach/regs_glb.h>
 #include <mach/regs_ahb.h>
 #include <mach/sci.h>
-#include <mach/memfreq_ondemand.h>
+
 #include "mali_kernel_common.h"
 #include "mali_osk.h"
 #include "mali_platform.h"
 
-
-#define MALI_BANDWIDTH (1600*1024*1024)
-
-u32 calculate_gpu_utilization(void* arg);
-u32 mem_flag = 0;
-
-static unsigned int mali_memfreq_demand(struct memfreq_dbs *h)
-{
-	u32 bw = calculate_gpu_utilization(NULL);
-	return (MALI_BANDWIDTH>>8)*bw;
-}
-
-static struct memfreq_dbs mali_memfreq_desc = {
-	.level = 0,
-	.memfreq_demand = mali_memfreq_demand,
-};
 
 static struct clk* g_gpu_clock = NULL;
 
@@ -54,25 +38,13 @@ _mali_osk_errcode_t mali_platform_init(void)
 	g_gpu_clock = clk_get(NULL, "clk_gpu_axi");
 
 	MALI_DEBUG_ASSERT(g_gpu_clock);
-	
-	if (mem_flag == 0)
-	{
-		register_memfreq_ondemand (&mali_memfreq_desc);
-		mem_flag = 1;
-	}
 
-	//sci_glb_clr(REG_GLB_G3D_PWR_CTL, BIT_G3D_POW_FORCE_PD);
-	//while(sci_glb_read(REG_GLB_G3D_PWR_CTL, BITS_PD_G3D_STATUS(0x1f))) udelay(100);
-	{
-		sci_glb_clr(REG_GLB_G3D_PWR_CTL, BIT_G3D_POW_FORCE_PD);
-		while(sci_glb_read(REG_GLB_G3D_PWR_CTL, BITS_PD_G3D_STATUS(0x1f))) udelay(100);
-		msleep(5);
-	}
+	sci_glb_clr(REG_GLB_G3D_PWR_CTL, BIT_G3D_POW_FORCE_PD);
+	msleep(2);
 	if(!g_gpu_clock_on)
 	{
 		g_gpu_clock_on = 1;
 		clk_enable(g_gpu_clock);
-		udelay(300);
 	}
 	MALI_SUCCESS;
 }
@@ -85,12 +57,6 @@ _mali_osk_errcode_t mali_platform_deinit(void)
 		clk_disable(g_gpu_clock);
 	}
 	sci_glb_set(REG_GLB_G3D_PWR_CTL, BIT_G3D_POW_FORCE_PD);
-	if (mem_flag == 1)
-	{
-		unregister_memfreq_ondemand (&mali_memfreq_desc);
-		mem_flag = 0;
-	}
-
 	MALI_SUCCESS;
 }
 
@@ -99,17 +65,12 @@ _mali_osk_errcode_t mali_platform_power_mode_change(mali_power_mode power_mode)
 	switch(power_mode)
 	{
 	case MALI_POWER_MODE_ON:
-		if(sci_glb_read(REG_GLB_G3D_PWR_CTL, BIT_G3D_POW_FORCE_PD))
-		{
-			sci_glb_clr(REG_GLB_G3D_PWR_CTL, BIT_G3D_POW_FORCE_PD);
-			while(sci_glb_read(REG_GLB_G3D_PWR_CTL, BITS_PD_G3D_STATUS(0x1f))) udelay(100);
-                        msleep(5);
-		}
+		sci_glb_clr(REG_GLB_G3D_PWR_CTL, BIT_G3D_POW_FORCE_PD);
+		msleep(2);
 		if(!g_gpu_clock_on)
 		{
 			g_gpu_clock_on = 1;
 			clk_enable(g_gpu_clock);
-			udelay(300);
 		}
 		break;
 	case MALI_POWER_MODE_LIGHT_SLEEP:
@@ -135,7 +96,6 @@ static int g_gpu_clock_div = 1;
 
 void mali_gpu_utilization_handler(u32 utilization)
 {
-#if 0
 	// if the loading ratio is greater then 90%, switch the clock to the maximum
 	if(utilization >= (256*9/10))
 	{
@@ -158,7 +118,6 @@ void mali_gpu_utilization_handler(u32 utilization)
 	if(g_gpu_clock_div > 8) g_gpu_clock_div = 8;
 
 	sci_glb_write(REG_GLB_GEN2, BITS_CLK_GPU_AXI_DIV(g_gpu_clock_div-1), BITS_CLK_GPU_AXI_DIV(7));
-#endif
 }
 
 void set_mali_parent_power_domain(void* dev)

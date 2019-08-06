@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2011 ARM Limited. All rights reserved.
+ * Copyright (C) 2010-2012 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -13,6 +13,6 @@
 
 #define ARCH_UMP_BACKEND_DEFAULT          1
 #define ARCH_UMP_MEMORY_ADDRESS_DEFAULT   0xCE000000
-#define ARCH_UMP_MEMORY_SIZE_DEFAULT 512UL * 1024UL * 1024UL
+#define ARCH_UMP_MEMORY_SIZE_DEFAULT 256UL * 1024UL * 1024UL
 
 #endif /* __ARCH_CONFIG_H__ */

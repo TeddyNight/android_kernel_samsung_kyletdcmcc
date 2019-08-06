@@ -113,14 +113,12 @@ _mali_osk_lock_t *_mali_osk_lock_init( _mali_osk_lock_flags_t flags, u32 initial
 		lock->flags = 0;
 		spin_lock_init( &lock->obj.spinlock );
 	}
-#if 0
 	else if ( (flags & _MALI_OSK_LOCKFLAG_NONINTERRUPTABLE)
 			  && (flags & _MALI_OSK_LOCKFLAG_READERWRITER) )
 	{
 		lock->type = _MALI_OSK_INTERNAL_LOCKTYPE_MUTEX_NONINT_RW;
 		init_rwsem( &lock->obj.rw_sema );
 	}
-#endif
 	else
 	{
 		/* Usual mutex types */
@@ -188,7 +186,11 @@ _mali_osk_errcode_t _mali_osk_lock_wait( _mali_osk_lock_t *lock, _mali_osk_lock_
 		spin_lock(&lock->obj.spinlock);
 		break;
 	case _MALI_OSK_INTERNAL_LOCKTYPE_SPIN_IRQ:
-		spin_lock_irqsave(&lock->obj.spinlock, lock->flags);
+		{
+			unsigned long tmp_flags;
+			spin_lock_irqsave(&lock->obj.spinlock, tmp_flags);
+			lock->flags = tmp_flags;
+		}
 		break;
 
 	case _MALI_OSK_INTERNAL_LOCKTYPE_MUTEX:

@@ -18,9 +18,7 @@
 #include "mali_kernel_core.h"
 #include "mali_group.h"
 
-#define MALI_PM_LIGHT_SLEEP_TIMEOUT 100
-
-extern int vsp_is_work();
+#define MALI_PM_LIGHT_SLEEP_TIMEOUT 1000
 
 enum mali_pm_scheme
 {
@@ -152,16 +150,13 @@ inline void mali_pm_execute_state_change_unlock(void)
 
 static void mali_pm_powerup(void)
 {
+#if !MALI_PMM_RUNTIME_JOB_CONTROL_ON
 	MALI_DEBUG_PRINT(3, ("Mali PM: Setting GPU power mode to MALI_POWER_MODE_ON\n"));
 	mali_platform_power_mode_change(MALI_POWER_MODE_ON);
-
-#if MALI_PMM_RUNTIME_JOB_CONTROL_ON
-
+#else
 	/* Aquire our reference */
-	MALI_DEBUG_PRINT(4, ("Mali PM: Getting device PM reference (=> requesting MALI_POWER_MODE_ON)\n"));
 	_mali_osk_pm_dev_activate();
 #endif
-
 	mali_group_power_on();
 }
 
@@ -171,10 +166,16 @@ static void mali_pm_powerdown(mali_power_mode power_mode)
 	{
 		mali_group_power_off();
 	}
-	mali_platform_power_mode_change(power_mode);
 
-#if MALI_PMM_RUNTIME_JOB_CONTROL_ON
+#if !MALI_PMM_RUNTIME_JOB_CONTROL_ON
+	mali_platform_power_mode_change(power_mode);
+#else
 	_mali_osk_pm_dev_idle();
+
+	if (MALI_POWER_MODE_DEEP_SLEEP == power_mode)
+	{
+		mali_platform_power_mode_change(power_mode);
+	}
 #endif
 }
 
@@ -404,21 +405,13 @@ static void mali_pm_event(enum mali_pm_event pm_event, mali_bool schedule_work, 
 			MALI_DEBUG_ASSERT( MALI_PM_SCHEME_OS_SUSPENDED    != current_scheme );
 			break;
 		case MALI_PM_EVENT_CORES_IDLE:
-			next_level_dynamic = MALI_PM_LEVEL_2_STANDBY;
+			next_level_dynamic = MALI_PM_LEVEL_3_LIGHT_SLEEP;
 			/*MALI_DEBUG_ASSERT( MALI_PM_SCHEME_OS_SUSPENDED    != current_scheme );*/
 			break;
 		case MALI_PM_EVENT_TIMER_LIGHT_SLEEP:
 			MALI_DEBUG_ASSERT( MALI_PM_SCHEME_ALWAYS_ON != current_scheme );
 			MALI_DEBUG_ASSERT( MALI_PM_SCHEME_OS_SUSPENDED    != current_scheme );
-/**			if(vsp_is_work())
-			{
-				next_level_dynamic = MALI_PM_LEVEL_4_DEEP_SLEEP;
-			}
-			else
-			{
-**/
-				next_level_dynamic = MALI_PM_LEVEL_3_LIGHT_SLEEP;
-//Workaround			}
+			next_level_dynamic = MALI_PM_LEVEL_3_LIGHT_SLEEP;
 			break;
 		case MALI_PM_EVENT_TIMER_DEEP_SLEEP:
 			MALI_DEBUG_ASSERT( MALI_PM_SCHEME_ALWAYS_ON != current_scheme );
@@ -548,10 +541,13 @@ void mali_pm_os_resume(void)
 
 void mali_pm_runtime_suspend(void)
 {
-	MALI_DEBUG_PRINT(3, ("Mali PM: OS runtime suspended\n"));
+	//Confirmed to remove from SPRD, sejong123.park
+	//MALI_DEBUG_PRINT(2, ("Mali PM: OS runtime suspended\n"));
+	mali_platform_power_mode_change(MALI_POWER_MODE_LIGHT_SLEEP);
 }
 
 void mali_pm_runtime_resume(void)
 {
-	MALI_DEBUG_PRINT(3, ("Mali PM: OS runtime resumed\n"));
+	//MALI_DEBUG_PRINT(2, ("Mali PM: OS runtime resumed\n"));
+	mali_platform_power_mode_change(MALI_POWER_MODE_ON);
 }
